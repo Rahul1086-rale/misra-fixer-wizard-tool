@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function ChatInterface() {
@@ -36,34 +37,23 @@ export default function ChatInterface() {
     setMessage('');
 
     try {
-      // Simulate API call to backend
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: message,
-          projectId: state.projectId,
-          context: {
-            violations: state.selectedViolations,
-            currentStep: state.currentStep,
-          },
-        }),
-      });
+      if (!state.projectId) {
+        throw new Error('No project ID available');
+      }
 
-      if (response.ok) {
-        const data = await response.json();
-        
+      const response = await apiClient.sendChatMessage(message, state.projectId);
+
+      if (response.success && response.data) {
         const assistantMessage = {
           id: uuidv4(),
           type: 'assistant' as const,
-          content: data.response,
+          content: response.data.response,
           timestamp: new Date(),
-          codeSnippets: data.codeSnippets || [],
         };
 
         dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
       } else {
-        throw new Error('Chat request failed');
+        throw new Error(response.error || 'Chat request failed');
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -92,7 +82,7 @@ export default function ChatInterface() {
           <div className="text-center text-muted-foreground py-8">
             <Bot className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Welcome to MISRA Fix Copilot!</p>
-            <p className="text-sm">Upload your files to get started.</p>
+            <p className="text-sm">Upload your files and start the workflow to begin.</p>
           </div>
         )}
         
@@ -120,6 +110,7 @@ export default function ChatInterface() {
                 {msg.content}
               </div>
               
+              {/* Code snippets display */}
               {(msg as any).codeSnippets && (msg as any).codeSnippets.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {(msg as any).codeSnippets.map((snippet: string, index: number) => (
@@ -182,6 +173,16 @@ export default function ChatInterface() {
           >
             <Send className="w-4 h-4" />
           </Button>
+        </div>
+        
+        {/* Workflow Status */}
+        <div className="mt-3 text-xs text-muted-foreground">
+          Current Step: <span className="font-medium capitalize">{state.currentStep}</span>
+          {state.projectId && (
+            <span className="ml-3">
+              Project: <span className="font-mono">{state.projectId.slice(0, 8)}...</span>
+            </span>
+          )}
         </div>
       </div>
     </Card>

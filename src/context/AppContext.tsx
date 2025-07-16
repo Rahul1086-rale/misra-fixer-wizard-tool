@@ -120,14 +120,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         currentStep: 'violations'
       };
     case 'TOGGLE_VIOLATION':
+      const updatedViolations = state.violations.map(v =>
+        v.line.toString() === action.payload ? { ...v, selected: !v.selected } : v
+      );
       return {
         ...state,
-        violations: state.violations.map(v =>
-          v.line.toString() === action.payload ? { ...v, selected: !v.selected } : v
-        ),
-        selectedViolations: state.violations.filter(v => 
-          v.line.toString() === action.payload ? !v.selected : v.selected
-        )
+        violations: updatedViolations,
+        selectedViolations: updatedViolations.filter(v => v.selected)
       };
     case 'ADD_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] };

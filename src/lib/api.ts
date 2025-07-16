@@ -91,25 +91,25 @@ class ApiClient {
   }
 
   // Processing endpoints
-  async addLineNumbers(projectId: string, filePath: string): Promise<ApiResponse<{ numberedFilePath: string }>> {
+  async addLineNumbers(projectId: string): Promise<ApiResponse<{ numberedFilePath: string }>> {
     return this.request('/process/add-line-numbers', {
       method: 'POST',
-      body: JSON.stringify({ projectId, filePath }),
+      body: JSON.stringify({ projectId }),
     });
   }
 
-  async applyFixes(projectId: string, numberedFilePath: string): Promise<ApiResponse<{ fixedFilePath: string }>> {
+  async applyFixes(projectId: string): Promise<ApiResponse<{ fixedFilePath: string }>> {
     return this.request('/process/apply-fixes', {
       method: 'POST',
-      body: JSON.stringify({ projectId, numberedFilePath }),
+      body: JSON.stringify({ projectId }),
     });
   }
 
   // Gemini AI endpoints
-  async sendFirstPrompt(projectId: string, numberedFilePath: string): Promise<ApiResponse<GeminiResponse>> {
+  async sendFirstPrompt(projectId: string): Promise<ApiResponse<GeminiResponse>> {
     return this.request('/gemini/first-prompt', {
       method: 'POST',
-      body: JSON.stringify({ projectId, numberedFilePath }),
+      body: JSON.stringify({ projectId }),
     });
   }
 
@@ -122,12 +122,11 @@ class ApiClient {
 
   async sendChatMessage(
     message: string,
-    projectId: string,
-    context: any
-  ): Promise<ApiResponse<GeminiResponse>> {
+    projectId: string
+  ): Promise<ApiResponse<{ response: string }>> {
     return this.request('/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, projectId, context }),
+      body: JSON.stringify({ message, projectId }),
     });
   }
 

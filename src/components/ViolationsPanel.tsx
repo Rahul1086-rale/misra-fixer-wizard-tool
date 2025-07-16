@@ -105,45 +105,62 @@ export default function ViolationsPanel() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+        <div className="space-y-2 max-h-[500px] overflow-y-auto">
           {state.violations.map((violation, index) => (
             <div
-              key={`${violation.line}-${index}`}
-              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                violation.selected ? 'bg-accent border-primary' : 'hover:bg-muted'
+              key={`${violation.file}-${violation.line}-${violation.misra}-${index}`}
+              className={`group relative p-4 border rounded-xl cursor-pointer transition-all duration-200 ${
+                violation.selected 
+                  ? 'bg-gradient-to-r from-primary/10 to-primary/5 border-primary/50 shadow-sm' 
+                  : 'hover:bg-muted/50 hover:border-border'
               }`}
               onClick={() => toggleViolation(violation.line)}
             >
               <div className="flex items-start gap-3">
-                <Checkbox
-                  checked={violation.selected}
-                  onChange={() => toggleViolation(violation.line)}
-                  className="mt-1"
-                />
+                <div className="mt-1">
+                  <Checkbox
+                    checked={violation.selected || false}
+                    onCheckedChange={() => toggleViolation(violation.line)}
+                    className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                  />
+                </div>
                 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-3">
                     {getSeverityIcon(violation.level)}
-                    <Badge variant={getSeverityColor(violation.level) as any} className="text-xs">
+                    <Badge 
+                      variant={getSeverityColor(violation.level) as any} 
+                      className="text-xs font-medium"
+                    >
                       {violation.level}
                     </Badge>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="secondary" className="text-xs">
                       Line {violation.line}
                     </Badge>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs font-mono">
                       {violation.misra}
                     </Badge>
                   </div>
                   
-                  <p className="text-sm text-foreground font-medium mb-1">
+                  <p className="text-sm text-foreground font-medium mb-2 leading-relaxed">
                     {violation.warning}
                   </p>
                   
-                  <p className="text-xs text-muted-foreground truncate">
-                    {violation.path}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30"></div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {violation.file} • {violation.path}
+                    </p>
+                  </div>
                 </div>
               </div>
+              
+              {/* Selection indicator */}
+              {violation.selected && (
+                <div className="absolute top-2 right-2">
+                  <CheckSquare className="w-4 h-4 text-primary" />
+                </div>
+              )}
             </div>
           ))}
         </div>

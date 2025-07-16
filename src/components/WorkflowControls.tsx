@@ -5,13 +5,16 @@ import {
   Wrench, 
   Download, 
   RefreshCw, 
-  CheckCircle
+  CheckCircle,
+  Merge,
+  FileX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function WorkflowControls() {
@@ -22,26 +25,137 @@ export default function WorkflowControls() {
     if (!state.uploadedFile || !state.projectId) return;
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      // Simulate API call
-      setTimeout(() => {
-        dispatch({ type: 'SET_NUMBERED_FILE', payload: { name: `numbered_${state.uploadedFile!.name}`, path: '/path/to/numbered' }});
-        dispatch({ type: 'SET_CURRENT_STEP', payload: 'chat' });
-        dispatch({ type: 'SET_LOADING', payload: false });
-        toast({ title: "Success", description: "Line numbers added" });
-      }, 1000);
+      const response = await apiClient.addLineNumbers(state.projectId);
+      
+      if (response.success && response.data) {
+        dispatch({ type: 'SET_NUMBERED_FILE', payload: { 
+          name: `numbered_${state.uploadedFile.name}`, 
+          path: response.data.numberedFilePath 
+        }});
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'numbering' });
+        toast({ title: "Success", description: "Line numbers added successfully" });
+      } else {
+        throw new Error(response.error || 'Failed to add line numbers');
+      }
     } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to add line numbers',
+        variant: "destructive" 
+      });
+    } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
   const sendFirstPrompt = async () => {
+    if (!state.numberedFile || !state.projectId) return;
     try {
       dispatch({ type: 'SET_PROCESSING', payload: true });
-      const message = { id: uuidv4(), type: 'assistant' as const, content: 'FILE RECEIVED. READY FOR VIOLATIONS.', timestamp: new Date() };
-      dispatch({ type: 'ADD_MESSAGE', payload: message });
-      dispatch({ type: 'SET_PROCESSING', payload: false });
+      const response = await apiClient.sendFirstPrompt(state.projectId);
+      
+      if (response.success && response.data) {
+        const message = { 
+          id: uuidv4(), 
+          type: 'assistant' as const, 
+          content: response.data.response, 
+          timestamp: new Date() 
+        };
+        dispatch({ type: 'ADD_MESSAGE', payload: message });
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'chat' });
+        toast({ title: "Success", description: "Chat session initialized with Gemini" });
+      } else {
+        throw new Error(response.error || 'Failed to initialize chat');
+      }
     } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to initialize chat',
+        variant: "destructive" 
+      });
+    } finally {
       dispatch({ type: 'SET_PROCESSING', payload: false });
+    }
+  };
+
+  const fixViolations = async () => {
+    if (!state.projectId || state.selectedViolations.length === 0) return;
+    try {
+      dispatch({ type: 'SET_PROCESSING', payload: true });
+      const response = await apiClient.fixViolations(state.projectId, state.selectedViolations);
+      
+      if (response.success && response.data) {
+        const message = { 
+          id: uuidv4(), 
+          type: 'assistant' as const, 
+          content: response.data.response, 
+          timestamp: new Date() 
+        };
+        dispatch({ type: 'ADD_MESSAGE', payload: message });
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'fixing' });
+        toast({ title: "Success", description: "Violations fixed by Gemini" });
+      } else {
+        throw new Error(response.error || 'Failed to fix violations');
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to fix violations',
+        variant: "destructive" 
+      });
+    } finally {
+      dispatch({ type: 'SET_PROCESSING', payload: false });
+    }
+  };
+
+  const applyFixes = async () => {
+    if (!state.projectId) return;
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await apiClient.applyFixes(state.projectId);
+      
+      if (response.success && response.data) {
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'finalize' });
+        toast({ title: "Success", description: "Fixes applied to code successfully" });
+      } else {
+        throw new Error(response.error || 'Failed to apply fixes');
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to apply fixes',
+        variant: "destructive" 
+      });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  const downloadFixedFile = async () => {
+    if (!state.projectId) return;
+    try {
+      const blob = await apiClient.downloadFixedFile(state.projectId);
+      
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `fixed_${state.uploadedFile?.name || 'file.cpp'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast({ title: "Success", description: "Fixed file downloaded successfully" });
+      } else {
+        throw new Error('Failed to download file');
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to download file',
+        variant: "destructive" 
+      });
     }
   };
 
@@ -55,17 +169,27 @@ export default function WorkflowControls() {
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <span className="text-sm font-medium">1. Add Line Numbers</span>
-          <Button onClick={addLineNumbers} variant="outline" className="w-full" disabled={!state.uploadedFile || state.isLoading}>
+          <Button 
+            onClick={addLineNumbers} 
+            variant="outline" 
+            className="w-full" 
+            disabled={!state.uploadedFile || state.isLoading}
+          >
             <Hash className="w-4 h-4 mr-2" />
-            Add Line Numbers
+            {state.isLoading ? 'Processing...' : 'Add Line Numbers'}
           </Button>
         </div>
 
         <div className="space-y-2">
-          <span className="text-sm font-medium">2. Initialize Gemini</span>
-          <Button onClick={sendFirstPrompt} variant="outline" className="w-full" disabled={!state.numberedFile}>
+          <span className="text-sm font-medium">2. Start Chat</span>
+          <Button 
+            onClick={sendFirstPrompt} 
+            variant="outline" 
+            className="w-full" 
+            disabled={!state.numberedFile || state.isProcessing}
+          >
             <MessageSquare className="w-4 h-4 mr-2" />
-            Send First Prompt
+            {state.isProcessing ? 'Initializing...' : 'Start Chat with Gemini'}
           </Button>
         </div>
 
@@ -74,9 +198,40 @@ export default function WorkflowControls() {
             <span className="text-sm font-medium">3. Fix Violations</span>
             <Badge variant="outline">{selectedCount} selected</Badge>
           </div>
-          <Button variant="outline" className="w-full" disabled={selectedCount === 0}>
+          <Button 
+            onClick={fixViolations} 
+            variant="outline" 
+            className="w-full" 
+            disabled={selectedCount === 0 || state.isProcessing}
+          >
             <Wrench className="w-4 h-4 mr-2" />
-            Fix Selected Violations
+            {state.isProcessing ? 'Fixing...' : 'Fix Selected Violations'}
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-sm font-medium">4. Apply Fixes</span>
+          <Button 
+            onClick={applyFixes} 
+            variant="outline" 
+            className="w-full" 
+            disabled={state.currentStep !== 'fixing' || state.isLoading}
+          >
+            <Merge className="w-4 h-4 mr-2" />
+            {state.isLoading ? 'Applying...' : 'Merge Fixes'}
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-sm font-medium">5. Download</span>
+          <Button 
+            onClick={downloadFixedFile} 
+            variant="default" 
+            className="w-full" 
+            disabled={state.currentStep !== 'finalize'}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Fixed File
           </Button>
         </div>
 
