@@ -33,55 +33,67 @@ export interface FixedSnippet {
 }
 
 export interface AppState {
-  // Project info
-  projectId: string | null;
-  uploadedFile: {
-    name: string;
-    path: string;
-  } | null;
-  currentVersion: number;
+  // File management
+  uploadedFile: { name: string; path: string } | null;
+  excelFile: { name: string; path: string } | null;
+  numberedFile: { name: string; path: string } | null;
   
   // Violations
   violations: Violation[];
   selectedViolations: Violation[];
   
-  // Chat
-  chatHistory: ChatMessage[];
+  // Chat state
+  messages: ChatMessage[];
+  isProcessing: boolean;
+  
+  // Workflow state
+  currentStep: 'upload' | 'violations' | 'numbering' | 'chat' | 'fixing' | 'finalize';
   isLoading: boolean;
   
-  // Fixed snippets
+  // Project state
+  projectId: string | null;
+  
+  // Legacy support
+  currentVersion: number;
+  chatHistory: ChatMessage[];
   fixedSnippets: FixedSnippet[];
-  
-  // Settings
   modelSettings: ModelSettings;
-  
-  // Session
   sessionId: string | null;
 }
 
 type AppAction =
-  | { type: 'SET_PROJECT_ID'; payload: string }
   | { type: 'SET_UPLOADED_FILE'; payload: { name: string; path: string } }
+  | { type: 'SET_EXCEL_FILE'; payload: { name: string; path: string } }
+  | { type: 'SET_NUMBERED_FILE'; payload: { name: string; path: string } }
   | { type: 'SET_VIOLATIONS'; payload: Violation[] }
-  | { type: 'TOGGLE_VIOLATION'; payload: string } // violation key
+  | { type: 'TOGGLE_VIOLATION'; payload: string }
+  | { type: 'ADD_MESSAGE'; payload: ChatMessage }
+  | { type: 'SET_CURRENT_STEP'; payload: AppState['currentStep'] }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_PROCESSING'; payload: boolean }
+  | { type: 'SET_PROJECT_ID'; payload: string }
+  | { type: 'RESET_STATE' }
   | { type: 'SET_SELECTED_VIOLATIONS'; payload: Violation[] }
   | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
-  | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_FIXED_SNIPPETS'; payload: FixedSnippet[] }
   | { type: 'UPDATE_MODEL_SETTINGS'; payload: Partial<ModelSettings> }
   | { type: 'SET_SESSION_ID'; payload: string }
   | { type: 'INCREMENT_VERSION' }
-  | { type: 'RESET_STATE' }
   | { type: 'LOAD_SESSION_STATE'; payload: Partial<AppState> };
 
 const initialState: AppState = {
-  projectId: null,
   uploadedFile: null,
-  currentVersion: 0,
+  excelFile: null,
+  numberedFile: null,
   violations: [],
   selectedViolations: [],
-  chatHistory: [],
+  messages: [],
+  isProcessing: false,
+  currentStep: 'upload',
   isLoading: false,
+  projectId: null,
+  currentVersion: 0,
+  chatHistory: [],
   fixedSnippets: [],
   modelSettings: {
     temperature: 0.5,
@@ -95,64 +107,60 @@ const initialState: AppState = {
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case 'SET_PROJECT_ID':
-      return { ...state, projectId: action.payload };
-    
     case 'SET_UPLOADED_FILE':
       return { ...state, uploadedFile: action.payload };
-    
+    case 'SET_EXCEL_FILE':
+      return { ...state, excelFile: action.payload };
+    case 'SET_NUMBERED_FILE':
+      return { ...state, numberedFile: action.payload };
     case 'SET_VIOLATIONS':
-      return { ...state, violations: action.payload };
-    
+      return { 
+        ...state, 
+        violations: action.payload.map(v => ({ ...v, selected: false })),
+        currentStep: 'violations'
+      };
     case 'TOGGLE_VIOLATION':
-      const violation = state.violations.find(v => 
-        `${v.file}-${v.line}-${v.misra}` === action.payload
-      );
-      if (!violation) return state;
-      
-      const isSelected = state.selectedViolations.some(v => 
-        `${v.file}-${v.line}-${v.misra}` === action.payload
-      );
-      
       return {
         ...state,
-        selectedViolations: isSelected
-          ? state.selectedViolations.filter(v => 
-              `${v.file}-${v.line}-${v.misra}` !== action.payload
-            )
-          : [...state.selectedViolations, violation]
+        violations: state.violations.map(v =>
+          v.line.toString() === action.payload ? { ...v, selected: !v.selected } : v
+        ),
+        selectedViolations: state.violations.filter(v => 
+          v.line.toString() === action.payload ? !v.selected : v.selected
+        )
       };
+    case 'ADD_MESSAGE':
+      return { ...state, messages: [...state.messages, action.payload] };
+    case 'SET_CURRENT_STEP':
+      return { ...state, currentStep: action.payload };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_PROCESSING':
+      return { ...state, isProcessing: action.payload };
+    case 'SET_PROJECT_ID':
+      return { ...state, projectId: action.payload };
+    case 'RESET_STATE':
+      return initialState;
     
+    // Legacy support
     case 'SET_SELECTED_VIOLATIONS':
       return { ...state, selectedViolations: action.payload };
-    
     case 'ADD_CHAT_MESSAGE':
       return { 
         ...state, 
         chatHistory: [...state.chatHistory, action.payload]
       };
-    
-    case 'SET_LOADING':
-      return { ...state, isLoading: action.payload };
-    
     case 'SET_FIXED_SNIPPETS':
       return { ...state, fixedSnippets: action.payload };
-    
     case 'UPDATE_MODEL_SETTINGS':
       return { 
         ...state, 
         modelSettings: { ...state.modelSettings, ...action.payload }
       };
-    
     case 'SET_SESSION_ID':
       return { ...state, sessionId: action.payload };
-    
     case 'INCREMENT_VERSION':
       return { ...state, currentVersion: state.currentVersion + 1 };
-    
-    case 'RESET_STATE':
-      return initialState;
-    
     case 'LOAD_SESSION_STATE':
       return { ...state, ...action.payload };
     
