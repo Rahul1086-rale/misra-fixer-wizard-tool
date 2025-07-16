@@ -166,8 +166,9 @@ async def process_add_line_numbers(request: LineNumbersRequest):
         session = sessions[project_id]
         input_file = session['cpp_file']
         
-        # Create numbered file
-        numbered_filename = f"numbered_{session['original_filename']}"
+        # Create numbered file with .txt extension
+        original_name = Path(session['original_filename']).stem
+        numbered_filename = f"numbered_{original_name}.txt"
         numbered_path = os.path.join(UPLOAD_FOLDER, f"{project_id}_{numbered_filename}")
         
         add_line_numbers(input_file, numbered_path)
@@ -195,24 +196,39 @@ async def gemini_first_prompt(request: FirstPromptRequest):
         numbered_content = load_cpp_file(numbered_file)
         
         # Start chat session
-        chat = start_chat(model_name="gemini-2.5-flash")
+        chat = start_chat(model_name="gemini-2.5-pro")
         
         # Send first prompt
         response = send_file_intro(chat, numbered_content)
+        
+        # Check if response is None (blocked by safety filters)
+        if response is None:
+            raise HTTPException(
+                status_code=422, 
+                detail="Response was blocked by safety filters. Please try with different content or contact support."
+            )
         
         # Store chat session
         chat_sessions[project_id] = chat
         
         return GeminiResponse(response=response)
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+import logging
+import traceback
 
 @app.post("/api/gemini/fix-violations", response_model=FixViolationsResponse)
 async def gemini_fix_violations(request: FixViolationsRequest):
     try:
         project_id = request.projectId
         violations = request.violations
+        
+        print(f"Processing project_id: {project_id}")  # Debug
+        print(f"Number of violations: {len(violations)}")  # Debug
         
         if project_id not in chat_sessions:
             raise HTTPException(status_code=404, detail="Chat session not found")
@@ -231,27 +247,47 @@ async def gemini_fix_violations(request: FixViolationsRequest):
             )
         
         violations_str = "\n".join(violations_text)
+        print(f"Formatted violations length: {len(violations_str)}")  # Debug
         
         # Send to Gemini
+        print("Sending to Gemini...")  # Debug
         response = send_misra_violations(chat, violations_str)
+        print(f"Gemini response received: {response is not None}")  # Debug
+        
+        # Check if response is None (blocked by safety filters)
+        if response is None:
+            raise HTTPException(
+                status_code=422, 
+                detail="Response was blocked by safety filters. Please try with different content or contact support."
+            )
         
         # Extract code snippets
+        print("Extracting snippets...")  # Debug
         code_snippets = extract_snippets_from_response(response)
+        print(f"Extracted {len(code_snippets)} snippets")  # Debug
         
         # Save snippets to session
         if project_id in sessions:
+            print("Saving snippets to session...")  # Debug
             sessions[project_id]['fixed_snippets'] = code_snippets
             snippet_file = os.path.join(UPLOAD_FOLDER, f"{project_id}_snippets.json")
             save_snippets_to_json(code_snippets, snippet_file)
             sessions[project_id]['snippet_file'] = snippet_file
+            print(f"Snippets saved to: {snippet_file}")  # Debug
         
         return FixViolationsResponse(
             response=response,
-            codeSnippets=list(code_snippets.values())
+            codeSnippets=[{"code": snippet} for snippet in code_snippets.values()]
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Add detailed error logging
+        print(f"Error in gemini_fix_violations: {str(e)}")
+        print(f"Error type: {type(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 @app.post("/api/process/apply-fixes", response_model=ApplyFixesResponse)
 async def process_apply_fixes(request: ApplyFixesRequest):
@@ -318,8 +354,17 @@ async def chat(request: ChatRequest):
         # Send message to Gemini
         response = chat_session.send_message(message)
         
+        # Check if response is None or blocked
+        if response is None or response.text is None:
+            raise HTTPException(
+                status_code=422, 
+                detail="Response was blocked by safety filters. Please try rephrasing your message."
+            )
+        
         return ChatResponse(response=response.text)
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

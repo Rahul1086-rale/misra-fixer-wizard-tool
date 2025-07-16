@@ -15,7 +15,7 @@ def load_cpp_file(file_path: str) -> str:
         return f.read()
 
 # === Step 2: Start Gemini Chat ===
-def start_chat(model_name="gemini-2.5-flash") -> ChatSession:
+def start_chat(model_name="gemini-2.5-pro") -> ChatSession:
     # Setup generation config
     generation_config = GenerationConfig(
         temperature=0.5,
@@ -51,12 +51,28 @@ def send_file_intro(chat: ChatSession, numbered_cpp: str):
         "'FILE RECEIVED. READY FOR VIOLATIONS.'"
     )
 
-    # Send system + file content
-    chat.send_message(intro_prompt)
-    resp = chat.send_message(numbered_cpp)
-    print("\n=== Gemini ===")
-    print(resp.text)
-    return resp.text
+    try:
+        # Send system + file content
+        chat.send_message(intro_prompt)
+        resp = chat.send_message(numbered_cpp)
+        print("\n=== Gemini ===", flush=True)
+        
+        # Handle blocked responses
+        if resp is None:
+            print("Response was blocked by safety filters")
+            return None
+        
+        # Check if response has text
+        if hasattr(resp, 'text') and resp.text:
+            print(resp.text)
+            return resp.text
+        else:
+            print("Response was empty or blocked")
+            return None
+            
+    except Exception as e:
+        print(f"Error in send_file_intro: {str(e)}")
+        return None
 
 # === Step 4: Send list of violations to fix ===
 def send_misra_violations(chat: ChatSession, violations_text: str) -> str:
