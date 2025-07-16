@@ -1,11 +1,14 @@
-# app.py - Flask Backend API Server
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+# app.py - FastAPI Backend API Server
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 import os
 import uuid
 import tempfile
 import json
-from werkzeug.utils import secure_filename
+from pathlib import Path
 
 # Import our Python modules
 from misra_chat_client import init_vertex_ai, load_cpp_file, start_chat, send_file_intro, send_misra_violations
@@ -15,8 +18,20 @@ from denumbering import remove_line_numbers
 from replace import merge_fixed_snippets_into_file
 from fixed_response_code_snippet import extract_snippets_from_response, save_snippets_to_json
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI(
+    title="MISRA Fix Copilot API",
+    description="API for fixing MISRA violations in C/C++ code using AI",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global storage for sessions
 sessions = {}
@@ -29,85 +44,124 @@ ALLOWED_EXTENSIONS = {'cpp', 'c', 'xlsx', 'xls'}
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-def allowed_file(filename):
+def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Initialize Vertex AI on startup
-init_vertex_ai()
+# Pydantic models for request/response validation
+class LineNumbersRequest(BaseModel):
+    projectId: str
 
-@app.route('/api/upload/cpp-file', methods=['POST'])
-def upload_cpp_file():
+class FirstPromptRequest(BaseModel):
+    projectId: str
+
+class FixViolationsRequest(BaseModel):
+    projectId: str
+    violations: List[Dict[str, Any]] = []
+
+class ApplyFixesRequest(BaseModel):
+    projectId: str
+
+class ChatRequest(BaseModel):
+    message: str
+    projectId: str
+
+class UploadResponse(BaseModel):
+    filePath: str
+    fileName: str
+
+class ProcessResponse(BaseModel):
+    numberedFilePath: str
+
+class GeminiResponse(BaseModel):
+    response: str
+
+class FixViolationsResponse(BaseModel):
+    response: str
+    codeSnippets: List[Dict[str, Any]]
+
+class ApplyFixesResponse(BaseModel):
+    fixedFilePath: str
+
+class ChatResponse(BaseModel):
+    response: str
+
+# Initialize Vertex AI on startup
+@app.on_event("startup")
+async def startup_event():
+    init_vertex_ai()
+
+@app.post("/api/upload/cpp-file", response_model=UploadResponse)
+async def upload_cpp_file(
+    file: UploadFile = File(...),
+    projectId: str = Form(...)
+):
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        project_id = request.form.get('projectId')
-        
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file selected")
         
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type'}), 400
+            raise HTTPException(status_code=400, detail="Invalid file type")
         
         # Save uploaded file
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, f"{project_id}_{filename}")
-        file.save(file_path)
+        filename = file.filename
+        file_path = os.path.join(UPLOAD_FOLDER, f"{projectId}_{filename}")
+        
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
         
         # Initialize session
-        sessions[project_id] = {
+        sessions[projectId] = {
             'cpp_file': file_path,
             'original_filename': filename
         }
         
-        return jsonify({
-            'filePath': file_path,
-            'fileName': filename
-        })
+        return UploadResponse(
+            filePath=file_path,
+            fileName=filename
+        )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/upload/misra-report', methods=['POST'])
-def upload_misra_report():
+@app.post("/api/upload/misra-report")
+async def upload_misra_report(
+    file: UploadFile = File(...),
+    projectId: str = Form(...),
+    targetFile: str = Form(...)
+):
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        project_id = request.form.get('projectId')
-        target_file = request.form.get('targetFile')
-        
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file selected")
         
         # Save Excel file
-        filename = secure_filename(file.filename)
-        excel_path = os.path.join(UPLOAD_FOLDER, f"{project_id}_report_{filename}")
-        file.save(excel_path)
+        filename = file.filename
+        excel_path = os.path.join(UPLOAD_FOLDER, f"{projectId}_report_{filename}")
+        
+        with open(excel_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
         
         # Extract violations
-        violations = extract_violations_for_file(excel_path, target_file)
+        violations = extract_violations_for_file(excel_path, targetFile)
         
         # Store in session
-        if project_id in sessions:
-            sessions[project_id]['excel_file'] = excel_path
-            sessions[project_id]['violations'] = violations
+        if projectId in sessions:
+            sessions[projectId]['excel_file'] = excel_path
+            sessions[projectId]['violations'] = violations
         
-        return jsonify(violations)
+        return violations
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/process/add-line-numbers', methods=['POST'])
-def process_add_line_numbers():
+@app.post("/api/process/add-line-numbers", response_model=ProcessResponse)
+async def process_add_line_numbers(request: LineNumbersRequest):
     try:
-        data = request.get_json()
-        project_id = data.get('projectId')
+        project_id = request.projectId
         
         if project_id not in sessions:
-            return jsonify({'error': 'Project not found'}), 404
+            raise HTTPException(status_code=404, detail="Project not found")
         
         session = sessions[project_id]
         input_file = session['cpp_file']
@@ -121,21 +175,18 @@ def process_add_line_numbers():
         # Update session
         sessions[project_id]['numbered_file'] = numbered_path
         
-        return jsonify({
-            'numberedFilePath': numbered_path
-        })
+        return ProcessResponse(numberedFilePath=numbered_path)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/gemini/first-prompt', methods=['POST'])
-def gemini_first_prompt():
+@app.post("/api/gemini/first-prompt", response_model=GeminiResponse)
+async def gemini_first_prompt(request: FirstPromptRequest):
     try:
-        data = request.get_json()
-        project_id = data.get('projectId')
+        project_id = request.projectId
         
         if project_id not in sessions:
-            return jsonify({'error': 'Project not found'}), 404
+            raise HTTPException(status_code=404, detail="Project not found")
         
         session = sessions[project_id]
         numbered_file = session['numbered_file']
@@ -152,22 +203,19 @@ def gemini_first_prompt():
         # Store chat session
         chat_sessions[project_id] = chat
         
-        return jsonify({
-            'response': response
-        })
+        return GeminiResponse(response=response)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/gemini/fix-violations', methods=['POST'])
-def gemini_fix_violations():
+@app.post("/api/gemini/fix-violations", response_model=FixViolationsResponse)
+async def gemini_fix_violations(request: FixViolationsRequest):
     try:
-        data = request.get_json()
-        project_id = data.get('projectId')
-        violations = data.get('violations', [])
+        project_id = request.projectId
+        violations = request.violations
         
         if project_id not in chat_sessions:
-            return jsonify({'error': 'Chat session not found'}), 404
+            raise HTTPException(status_code=404, detail="Chat session not found")
         
         chat = chat_sessions[project_id]
         
@@ -197,22 +245,21 @@ def gemini_fix_violations():
             save_snippets_to_json(code_snippets, snippet_file)
             sessions[project_id]['snippet_file'] = snippet_file
         
-        return jsonify({
-            'response': response,
-            'codeSnippets': list(code_snippets.values())
-        })
+        return FixViolationsResponse(
+            response=response,
+            codeSnippets=list(code_snippets.values())
+        )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/process/apply-fixes', methods=['POST'])
-def process_apply_fixes():
+@app.post("/api/process/apply-fixes", response_model=ApplyFixesResponse)
+async def process_apply_fixes(request: ApplyFixesRequest):
     try:
-        data = request.get_json()
-        project_id = data.get('projectId')
+        project_id = request.projectId
         
         if project_id not in sessions:
-            return jsonify({'error': 'Project not found'}), 404
+            raise HTTPException(status_code=404, detail="Project not found")
         
         session = sessions[project_id]
         numbered_file = session['numbered_file']
@@ -231,67 +278,71 @@ def process_apply_fixes():
         # Update session
         sessions[project_id]['fixed_file'] = final_fixed_path
         
-        return jsonify({
-            'fixedFilePath': final_fixed_path
-        })
+        return ApplyFixesResponse(fixedFilePath=final_fixed_path)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/download/fixed-file', methods=['GET'])
-def download_fixed_file():
+@app.get("/api/download/fixed-file")
+async def download_fixed_file(projectId: str = Query(...)):
     try:
-        project_id = request.args.get('projectId')
+        if projectId not in sessions:
+            raise HTTPException(status_code=404, detail="Project not found")
         
-        if project_id not in sessions:
-            return jsonify({'error': 'Project not found'}), 404
-        
-        session = sessions[project_id]
+        session = sessions[projectId]
         fixed_file = session.get('fixed_file')
         
         if not fixed_file or not os.path.exists(fixed_file):
-            return jsonify({'error': 'Fixed file not found'}), 404
+            raise HTTPException(status_code=404, detail="Fixed file not found")
         
-        return send_file(
-            fixed_file,
-            as_attachment=True,
-            download_name=f"fixed_{session['original_filename']}"
+        return FileResponse(
+            path=fixed_file,
+            filename=f"fixed_{session['original_filename']}",
+            media_type='application/octet-stream'
         )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/chat', methods=['POST'])
-def chat():
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
     try:
-        data = request.get_json()
-        message = data.get('message')
-        project_id = data.get('projectId')
+        message = request.message
+        project_id = request.projectId
         
         if project_id not in chat_sessions:
-            return jsonify({'error': 'Chat session not found'}), 404
+            raise HTTPException(status_code=404, detail="Chat session not found")
         
         chat_session = chat_sessions[project_id]
         
         # Send message to Gemini
         response = chat_session.send_message(message)
         
-        return jsonify({
-            'response': response.text
-        })
+        return ChatResponse(response=response.text)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/session-state', methods=['GET'])
-def get_session_state():
+@app.get("/api/session-state")
+async def get_session_state():
     # Return empty state for now
-    return jsonify({})
+    return {}
 
-@app.route('/api/session-state', methods=['POST'])
-def save_session_state():
+@app.post("/api/session-state")
+async def save_session_state():
     # For now, just return success
-    return jsonify({'success': True})
+    return {"success": True}
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {"message": "MISRA Fix Copilot API Server is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)
