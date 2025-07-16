@@ -2,7 +2,8 @@
 import pandas as pd
 import re
 
-def extract_violations_for_file(excel_path: str, target_file: str) -> str:
+def extract_violations_for_file(excel_path: str, target_file: str) -> list:
+    """Extract violations for a specific file from Excel report"""
     df = pd.read_excel(excel_path, engine="openpyxl", usecols="A:F")
 
     def parse_line_warning(text):
@@ -14,19 +15,18 @@ def extract_violations_for_file(excel_path: str, target_file: str) -> str:
     filtered_df = df[df['File'] == target_file]
 
     if filtered_df.empty:
-        return ""
+        return []
 
-    # Format for Gemini
-    # violations = []
-    # for _, row in filtered_df.iterrows():
-    #     violations.append(
-    #         f"File: {row['File']}\n"
-    #         f"Path: {row['Path']}\n"
-    #         f"Line: {row['Line']}\n"
-    #         f"Rule: {row['Misra']}\n"
-    #         f"Message: {row['Warning']}\n"
-    #     )
+    # Convert to list of dictionaries for JSON response
+    violations = []
+    for _, row in filtered_df.iterrows():
+        violations.append({
+            'file': row['File'],
+            'path': row['Path'],
+            'line': row['Line'],
+            'warning': row['Warning'],
+            'level': row['Level'],
+            'misra': row['Misra']
+        })
 
-    # return "\n".join(violations)
-
-    return filtered_df.to_string(index=False)
+    return violations

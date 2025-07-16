@@ -1,3 +1,4 @@
+# replace.py
 import json
 import re
 
@@ -10,7 +11,6 @@ def merge_fixed_snippets_into_file(original_file: str, fixes_dict: dict, output_
     with open(original_file, "r", encoding="utf-8") as f:
         original_lines = {}
         for line in f:
-            #match = re.match(r"^(\d+[a-zA-Z]*):(.*)$", line)
             match = re.match(r"^(\d+[a-zA-Z]*):(.*)$", line.rstrip('\n'))
 
             if match:
@@ -39,12 +39,3 @@ def merge_fixed_snippets_into_file(original_file: str, fixes_dict: dict, output_
             f.write(f"{lineno}:{merged_lines[lineno]}\n")
 
     print(f"✅ Merged output written to: {output_file}")
-
-
-
-if __name__ == "__main__":
-
-    with open("temp_snippets2.json", "r") as f:
-        fixes = json.load(f)
-
-    merge_fixed_snippets_into_file("numbered_safemondoor.cpp", fixes, "numbered_safemondoor_FIXED_MERGED.cpp")

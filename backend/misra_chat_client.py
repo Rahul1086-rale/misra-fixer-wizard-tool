@@ -1,7 +1,6 @@
+# misra_chat_client.py
 import vertexai
 from vertexai.generative_models import GenerativeModel, ChatSession, GenerationConfig, SafetySetting, HarmCategory, HarmBlockThreshold
-
-
 
 # === Step 0: Init Vertex AI ===
 def init_vertex_ai():
@@ -16,7 +15,7 @@ def load_cpp_file(file_path: str) -> str:
         return f.read()
 
 # === Step 2: Start Gemini Chat ===
-def start_chat(model_name="gemini-2.5-pro") -> ChatSession:
+def start_chat(model_name="gemini-2.5-flash") -> ChatSession:
     # Setup generation config
     generation_config = GenerationConfig(
         temperature=0.5,
@@ -95,7 +94,6 @@ def send_misra_violations(chat: ChatSession, violations_text: str) -> str:
             ---
 
             Here is the list of violations to fix:
-            ['File', 'Path', 'Line', 'Warning', 'Level', 'Misra']
 
             ---
 
