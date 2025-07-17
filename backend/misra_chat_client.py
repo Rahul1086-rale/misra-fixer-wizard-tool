@@ -53,8 +53,9 @@ def send_file_intro(chat: ChatSession, numbered_cpp: str):
 
     try:
         # Send system + file content
-        chat.send_message(intro_prompt)
-        resp = chat.send_message(numbered_cpp)
+        #chat.send_message(intro_prompt)
+        combined_message = intro_prompt + "\n\n" + numbered_cpp
+        resp = chat.send_message(combined_message)
         print("\n=== Gemini ===", flush=True)
         
         # Handle blocked responses
@@ -93,16 +94,18 @@ def send_misra_violations(chat: ChatSession, violations_text: str) -> str:
             Ensure all fixes:
             * Strictly adhere to MISRA C++ guidelines.
             * Preserve the original functionality.
-            * Maintain the existing coding style and formatting (indentation, braces, comments, etc.).
+            * Maintain the existing coding style and formatting (indentation, braces, comments, empty lines betweens functions etc.).
             * **Do NOT introduce any new MISRA violations.**
             * **Crucially, maintain the original line numbering prefix for each line in the fixed snippet.** Only modify the C++ code *after* the colon.
-            * **If you insert new lines, append lowercase letters to the line number (e.g., 123a:, 123b:).**
+            * *** If you insert **any new lines**, you must assign them a **line number based on the preceding line**, followed by lowercase letters in alphabetical order.
+            - Example: If a new line is to be inserted **after line 100**, label it as `100a:`. If more than one line is added after line 100, continue as `100b:`, `100c:`, and so on.**
             * **If a line's content should be removed or made empty as part of a fix, output only its line number followed by a colon (e.g., `123:`). Do NOT omit the line number itself.**
 
             ---
 
             **Output Instructions (Continuation):**
             Don't add `...` for non-fixed parts.
+            Don't remove the lines between functions if any.
             Give all changed/fixed lines in a single snippet for all violations.
             If there are too many fixed snippets to fit into a single response due to output token limits, provide a partial set. After each response, if more snippets are remaining, explicitly state: `--- CONTINUED ---` and wait for my 'next' command to provide the next batch. Do not provide any more output until I type 'next'.
             If you have provided all requested fixed snippets for this batch of violations, simply stop. Do NOT output `--- CONTINUED ---`.
