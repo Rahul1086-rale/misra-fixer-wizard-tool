@@ -121,7 +121,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_VIOLATIONS':
       return { 
         ...state, 
-        violations: action.payload.map(v => ({ ...v, selected: false })),
+        violations: action.payload,
         currentStep: 'violations'
       };
     case 'TOGGLE_VIOLATION':
