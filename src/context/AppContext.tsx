@@ -37,6 +37,7 @@ export interface AppState {
   uploadedFile: { name: string; path: string } | null;
   excelFile: { name: string; path: string } | null;
   numberedFile: { name: string; path: string } | null;
+  mergedFile: { name: string; path: string } | null;
   
   // Violations
   violations: Violation[];
@@ -65,6 +66,7 @@ type AppAction =
   | { type: 'SET_UPLOADED_FILE'; payload: { name: string; path: string } }
   | { type: 'SET_EXCEL_FILE'; payload: { name: string; path: string } }
   | { type: 'SET_NUMBERED_FILE'; payload: { name: string; path: string } }
+  | { type: 'SET_MERGED_FILE'; payload: { name: string; path: string } }
   | { type: 'SET_VIOLATIONS'; payload: Violation[] }
   | { type: 'TOGGLE_VIOLATION'; payload: string }
   | { type: 'ADD_MESSAGE'; payload: ChatMessage }
@@ -85,6 +87,7 @@ const initialState: AppState = {
   uploadedFile: null,
   excelFile: null,
   numberedFile: null,
+  mergedFile: null,
   violations: [],
   selectedViolations: [],
   messages: [],
@@ -113,6 +116,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, excelFile: action.payload };
     case 'SET_NUMBERED_FILE':
       return { ...state, numberedFile: action.payload };
+    case 'SET_MERGED_FILE':
+      return { ...state, mergedFile: action.payload };
     case 'SET_VIOLATIONS':
       return { 
         ...state, 

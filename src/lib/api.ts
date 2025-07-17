@@ -98,7 +98,7 @@ class ApiClient {
     });
   }
 
-  async applyFixes(projectId: string): Promise<ApiResponse<{ fixedFilePath: string }>> {
+  async applyFixes(projectId: string): Promise<ApiResponse<{ mergedFilePath: string }>> {
     return this.request('/process/apply-fixes', {
       method: 'POST',
       body: JSON.stringify({ projectId }),
@@ -109,7 +109,7 @@ class ApiClient {
   async sendFirstPrompt(projectId: string): Promise<ApiResponse<GeminiResponse>> {
     return this.request('/gemini/first-prompt', {
       method: 'POST',
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ projectId, use_merged_file: true }),
     });
   }
 
@@ -126,7 +126,7 @@ class ApiClient {
   ): Promise<ApiResponse<{ response: string }>> {
     return this.request('/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, projectId }),
+      body: JSON.stringify({ message, projectId, use_merged_file: true }),
     });
   }
 

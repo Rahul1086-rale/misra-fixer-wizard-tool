@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Code, CheckCircle } from 'lucide-react';
+import { Send, Bot, User, Code, CheckCircle, Download, Merge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,58 @@ export default function ChatInterface() {
   useEffect(() => {
     scrollToBottom();
   }, [state.messages]);
+
+  const applyFixes = async (messageId: string) => {
+    if (!state.projectId) return;
+    try {
+      const response = await apiClient.applyFixes(state.projectId);
+      
+      if (response.success && response.data) {
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'finalize' });
+        dispatch({ type: 'SET_MERGED_FILE', payload: { 
+          name: `merged_${state.uploadedFile?.name || 'file.cpp'}`, 
+          path: response.data.mergedFilePath 
+        }});
+        toast({ title: "Success", description: "Fixes applied to code successfully" });
+      } else {
+        throw new Error(response.error || 'Failed to apply fixes');
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to apply fixes',
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const downloadFixedFile = async () => {
+    if (!state.projectId) return;
+    try {
+      const blob = await apiClient.downloadFixedFile(state.projectId);
+      
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `fixed_${state.uploadedFile?.name || 'file.cpp'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast({ title: "Success", description: "Fixed file downloaded successfully" });
+      } else {
+        throw new Error('Failed to download file');
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : 'Failed to download file',
+        variant: "destructive" 
+      });
+    }
+  };
 
   const sendMessage = async () => {
     if (!message.trim() || state.isProcessing) return;
@@ -124,6 +176,30 @@ export default function ChatInterface() {
                       </pre>
                     </div>
                   ))}
+                </div>
+              )}
+              
+              {/* Action buttons for assistant messages (starting from 2nd message) */}
+              {msg.type === 'assistant' && state.messages.length >= 2 && (
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    onClick={() => applyFixes(msg.id)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    <Merge className="w-3 h-3 mr-1" />
+                    Merge Fixes
+                  </Button>
+                  <Button
+                    onClick={downloadFixedFile}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
                 </div>
               )}
             </div>

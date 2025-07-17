@@ -2,7 +2,6 @@ import React from 'react';
 import { AppProvider } from '@/context/AppContext';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploadSection from '@/components/FileUploadSection';
-import ViolationsPanel from '@/components/ViolationsPanel';
 import WorkflowControls from '@/components/WorkflowControls';
 import CodeSnippetsPanel from '@/components/CodeSnippetsPanel';
 
@@ -25,7 +24,6 @@ export default function ChatPage() {
             
             {/* Right Sidebar */}
             <div className="lg:col-span-1 space-y-4 overflow-y-auto">
-              <ViolationsPanel />
               <CodeSnippetsPanel />
             </div>
           </div>

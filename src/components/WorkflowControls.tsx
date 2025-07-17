@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Hash, 
   MessageSquare, 
@@ -7,7 +7,8 @@ import {
   RefreshCw, 
   CheckCircle,
   Merge,
-  FileX
+  FileX,
+  List
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,10 +17,12 @@ import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
 import { v4 as uuidv4 } from 'uuid';
+import ViolationsModal from './ViolationsModal';
 
 export default function WorkflowControls() {
   const { state, dispatch } = useAppContext();
   const { toast } = useToast();
+  const [showViolationsModal, setShowViolationsModal] = useState(false);
 
   const addLineNumbers = async () => {
     if (!state.uploadedFile || !state.projectId) return;
@@ -195,18 +198,29 @@ export default function WorkflowControls() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">3. Fix Violations</span>
+            <span className="text-sm font-medium">3. Select & Fix Violations</span>
             <Badge variant="outline">{selectedCount} selected</Badge>
           </div>
-          <Button 
-            onClick={fixViolations} 
-            variant="outline" 
-            className="w-full" 
-            disabled={selectedCount === 0 || state.isProcessing}
-          >
-            <Wrench className="w-4 h-4 mr-2" />
-            {state.isProcessing ? 'Fixing...' : 'Fix Selected Violations'}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => setShowViolationsModal(true)} 
+              variant="outline" 
+              className="flex-1" 
+              disabled={state.violations.length === 0}
+            >
+              <List className="w-4 h-4 mr-2" />
+              View Violations
+            </Button>
+            <Button 
+              onClick={fixViolations} 
+              variant="outline" 
+              className="flex-1" 
+              disabled={selectedCount === 0 || state.isProcessing}
+            >
+              <Wrench className="w-4 h-4 mr-2" />
+              {state.isProcessing ? 'Fixing...' : 'Fix Selected'}
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -242,6 +256,11 @@ export default function WorkflowControls() {
           </Button>
         </div>
       </CardContent>
+      
+      <ViolationsModal 
+        isOpen={showViolationsModal} 
+        onClose={() => setShowViolationsModal(false)} 
+      />
     </Card>
   );
 }
