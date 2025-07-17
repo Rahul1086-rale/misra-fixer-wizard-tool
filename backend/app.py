@@ -37,6 +37,18 @@ app.add_middleware(
 sessions = {}
 chat_sessions = {}
 
+# Default model settings
+default_model_settings = {
+    "model_name": "gemini-2.5-pro",
+    "temperature": 0.5,
+    "top_p": 0.95,
+    "max_tokens": 65535,
+    "safety_settings": False
+}
+
+# Global model settings storage
+model_settings = default_model_settings.copy()
+
 # Configure upload settings
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'cpp', 'c', 'xlsx', 'xls'}
@@ -65,6 +77,13 @@ class ChatRequest(BaseModel):
     message: str
     projectId: str
 
+class ModelSettings(BaseModel):
+    model_name: str
+    temperature: float
+    top_p: float
+    max_tokens: int
+    safety_settings: bool
+
 class UploadResponse(BaseModel):
     filePath: str
     fileName: str
@@ -85,10 +104,39 @@ class ApplyFixesResponse(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+class SettingsResponse(BaseModel):
+    success: bool
+    message: str
+
 # Initialize Vertex AI on startup
 @app.on_event("startup")
 async def startup_event():
     init_vertex_ai()
+
+# Settings endpoints
+@app.get("/api/settings", response_model=ModelSettings)
+async def get_settings():
+    """Get current model settings"""
+    return ModelSettings(**model_settings)
+
+@app.post("/api/settings", response_model=SettingsResponse)
+async def save_settings(settings: ModelSettings):
+    """Save model settings"""
+    try:
+        global model_settings
+        model_settings = settings.dict()
+        
+        # Optional: Save to file for persistence
+        settings_file = os.path.join(UPLOAD_FOLDER, 'model_settings.json')
+        with open(settings_file, 'w') as f:
+            json.dump(model_settings, f, indent=2)
+        
+        return SettingsResponse(
+            success=True,
+            message="Settings saved successfully"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
 
 @app.post("/api/upload/cpp-file", response_model=UploadResponse)
 async def upload_cpp_file(
@@ -195,8 +243,14 @@ async def gemini_first_prompt(request: FirstPromptRequest):
         # Load numbered file content
         numbered_content = load_cpp_file(numbered_file)
         
-        # Start chat session
-        chat = start_chat(model_name="gemini-2.5-pro")
+        # Start chat session with current model settings
+        chat = start_chat(
+            model_name=model_settings['model_name'],
+            temperature=model_settings['temperature'],
+            top_p=model_settings['top_p'],
+            max_tokens=model_settings['max_tokens'],
+            safety_settings=model_settings['safety_settings']
+        )
         
         # Send first prompt
         response = send_file_intro(chat, numbered_content)

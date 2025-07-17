@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Code, CheckCircle, Download, Merge } from 'lucide-react';
+import { Send, Bot, User, Code, CheckCircle, Download, Merge, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,10 @@ export default function ChatInterface() {
   useEffect(() => {
     scrollToBottom();
   }, [state.messages]);
+
+  const openSettings = () => {
+    window.open('/settings', '_blank');
+  };
 
   const applyFixes = async (messageId: string) => {
     if (!state.projectId) return;
@@ -127,9 +131,22 @@ export default function ChatInterface() {
   };
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="flex flex-col h-full relative">
+      {/* Settings Button - Top Right */}
+      {/* <div className="absolute top-4 right-4 z-10">
+        <Button
+          //onClick={openSettings}
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          title="Open Settings"
+        >
+          <Settings className="w-4 h-4" />
+        </Button>
+      </div> */}
+
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pt-12">
         {state.messages.length === 0 && (
           <div className="text-center text-muted-foreground py-8">
             <Bot className="w-12 h-12 mx-auto mb-4 opacity-50" />

@@ -15,29 +15,47 @@ def load_cpp_file(file_path: str) -> str:
         return f.read()
 
 # === Step 2: Start Gemini Chat ===
-def start_chat(model_name="gemini-2.5-pro") -> ChatSession:
-    # Setup generation config
+def start_chat(
+    model_name="gemini-2.5-pro",
+    temperature=0.5,
+    top_p=0.95,
+    max_tokens=65535,
+    safety_settings=False
+) -> ChatSession:
+    # Setup generation config with provided settings
     generation_config = GenerationConfig(
-        temperature=0.5,
-        top_p=0.95,
-        max_output_tokens=65535,
+        temperature=temperature,
+        top_p=top_p,
+        max_output_tokens=max_tokens,
         seed=15,
     )
 
-    # Setup safety settings (disable filtering)
-    safety_settings = [
-        SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=HarmBlockThreshold.BLOCK_NONE),
-        SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=HarmBlockThreshold.BLOCK_NONE),
-        SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=HarmBlockThreshold.BLOCK_NONE),
-        SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=HarmBlockThreshold.BLOCK_NONE),
-    ]
+    # Setup safety settings based on user preference
+    if safety_settings:
+        # Enable default safety filtering
+        safety_config = [
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE),
+        ]
+    else:
+        # Disable safety filtering (original behavior)
+        safety_config = [
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=HarmBlockThreshold.BLOCK_NONE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=HarmBlockThreshold.BLOCK_NONE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=HarmBlockThreshold.BLOCK_NONE),
+            SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=HarmBlockThreshold.BLOCK_NONE),
+        ]
 
     # Initialize model with configs
     model = GenerativeModel(
         model_name=model_name,
         generation_config=generation_config,
-        safety_settings=safety_settings,
+        safety_settings=safety_config,
     )
+    print("************************")
+    print(model_name)
 
     return model.start_chat()
 
