@@ -130,16 +130,6 @@ class ApiClient {
     });
   }
 
-  async extractSnippets(
-    projectId: string,
-    responseText: string
-  ): Promise<ApiResponse<{ snippets: Record<string, string> }>> {
-    return this.request('/process/extract-snippets', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, responseText }),
-    });
-  }
-
   // Download endpoints
   async downloadFixedFile(projectId: string): Promise<Blob | null> {
     try {
