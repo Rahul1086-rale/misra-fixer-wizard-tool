@@ -415,6 +415,19 @@ async def chat(request: ChatRequest):
                 detail="Response was blocked by safety filters. Please try rephrasing your message."
             )
         
+        # Extract code snippets from response and save to session
+        if project_id in sessions:
+            print("Extracting snippets from chat response...")  # Debug
+            code_snippets = extract_snippets_from_response(response.text)
+            print(f"Extracted {len(code_snippets)} snippets from chat")  # Debug
+            
+            # Save snippets to session (same as fix-violations endpoint)
+            sessions[project_id]['fixed_snippets'] = code_snippets
+            snippet_file = os.path.join(UPLOAD_FOLDER, f"{project_id}_snippets.json")
+            save_snippets_to_json(code_snippets, snippet_file)
+            sessions[project_id]['snippet_file'] = snippet_file
+            print(f"Chat snippets saved to: {snippet_file}")  # Debug
+        
         return ChatResponse(response=response.text)
         
     except HTTPException:
