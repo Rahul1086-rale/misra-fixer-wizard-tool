@@ -108,6 +108,22 @@ export default function ChatInterface() {
         };
 
         dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
+        
+        // Extract and update fixed snippets from the response
+        try {
+          const extractResponse = await apiClient.extractSnippets(state.projectId, response.data.response);
+          if (extractResponse.success && extractResponse.data) {
+            // Convert Record<string, string> to FixedSnippet[]
+            const snippets = Object.entries(extractResponse.data.snippets).map(([lineNumber, code]) => ({
+              lineNumber,
+              code,
+              applied: false
+            }));
+            dispatch({ type: 'SET_FIXED_SNIPPETS', payload: snippets });
+          }
+        } catch (extractError) {
+          console.warn('Failed to extract code snippets:', extractError);
+        }
       } else {
         throw new Error(response.error || 'Chat request failed');
       }
